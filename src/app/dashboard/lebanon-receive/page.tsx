@@ -2,6 +2,7 @@
 
 import {
   FormEvent,
+  Suspense,
   useCallback,
   useEffect,
   useState,
@@ -28,6 +29,14 @@ type PackageRow = {
 };
 
 export default function LebanonReceivePage() {
+  return (
+    <Suspense fallback={<LebanonReceiveLoading />}>
+      <LebanonReceiveContent />
+    </Suspense>
+  );
+}
+
+function LebanonReceiveContent() {
   const searchParams = useSearchParams();
 
   const [scanValue, setScanValue] = useState("");
@@ -629,6 +638,18 @@ export default function LebanonReceivePage() {
 
       </section>
 
+    </main>
+  );
+}
+
+function LebanonReceiveLoading() {
+  return (
+    <main className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 text-white">
+      <div className="mx-auto max-w-5xl px-6 py-12">
+        <div className="rounded-2xl border border-sky-500/30 bg-sky-500/10 p-5 text-sky-200">
+          Loading Lebanon Receiving...
+        </div>
+      </div>
     </main>
   );
 }
