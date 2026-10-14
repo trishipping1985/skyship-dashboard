@@ -10,8 +10,10 @@ export default function DashboardLayout({
   children: ReactNode;
 }) {
   const router = useRouter();
+
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [authorized, setAuthorized] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -41,26 +43,54 @@ export default function DashboardLayout({
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!mounted) {
-        return;
-      }
+    } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (!mounted) {
+          return;
+        }
 
-      if (!session?.user) {
-        setAuthorized(false);
-        router.replace("/login");
-        return;
-      }
+        if (!session?.user) {
+          setAuthorized(false);
+          setCheckingAuth(false);
+          router.replace("/login");
+          return;
+        }
 
-      setAuthorized(true);
-      setCheckingAuth(false);
-    });
+        setAuthorized(true);
+        setCheckingAuth(false);
+      }
+    );
 
     return () => {
       mounted = false;
       subscription.unsubscribe();
     };
   }, [router]);
+
+  async function handleLogout() {
+    if (signingOut) {
+      return;
+    }
+
+    setSigningOut(true);
+
+    try {
+      const { error } = await supabase.auth.signOut();
+
+      if (error) {
+        console.error("LOGOUT ERROR:", error);
+        setSigningOut(false);
+        return;
+      }
+
+      setAuthorized(false);
+      router.replace("/login");
+      router.refresh();
+    } catch (error) {
+      console.error("LOGOUT ERROR:", error);
+      setSigningOut(false);
+    }
+  }
 
   if (checkingAuth) {
     return (
@@ -76,5 +106,20 @@ export default function DashboardLayout({
     return null;
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <div className="fixed right-4 top-4 z-50">
+        <button
+          type="button"
+          onClick={handleLogout}
+          disabled={signingOut}
+          className="rounded-xl border border-white/20 bg-slate-950/90 px-4 py-2.5 text-sm font-bold text-white shadow-xl backdrop-blur transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {signingOut ? "Signing Out..." : "Logout"}
+        </button>
+      </div>
+
+      {children}
+    </>
+  );
 }
