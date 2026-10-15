@@ -16,13 +16,46 @@ export default function DashboardPage() {
           </h1>
 
           <p className="mt-3 max-w-2xl text-slate-300">
-            Manage package receiving between the USA warehouse and Lebanon.
+            Manage expected packages and warehouse receiving between the USA
+            and Lebanon.
           </p>
         </div>
       </header>
 
       <section className="mx-auto max-w-7xl px-6 py-12">
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 xl:grid-cols-3">
+          <Link
+            href="/dashboard/expected-packages"
+            className="group rounded-3xl border border-amber-400/20 bg-white/5 p-8 shadow-2xl transition hover:-translate-y-1 hover:border-amber-400/50 hover:bg-white/10"
+          >
+            <div className="flex h-full flex-col">
+              <div>
+                <div className="inline-flex rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-sm font-bold uppercase tracking-wider text-amber-300">
+                  Pre-Alerts
+                </div>
+
+                <h2 className="mt-6 text-3xl font-black">
+                  Expected Packages
+                </h2>
+
+                <p className="mt-3 text-lg text-slate-300">
+                  Register customer tracking numbers before packages arrive at
+                  the USA warehouse.
+                </p>
+              </div>
+
+              <div className="mt-10 flex items-center justify-between">
+                <span className="font-semibold text-amber-300">
+                  Open Expected Packages
+                </span>
+
+                <span className="text-3xl transition group-hover:translate-x-2">
+                  →
+                </span>
+              </div>
+            </div>
+          </Link>
+
           <Link
             href="/dashboard/receive"
             className="group rounded-3xl border border-sky-400/20 bg-white/5 p-8 shadow-2xl transition hover:-translate-y-1 hover:border-sky-400/50 hover:bg-white/10"
@@ -93,21 +126,27 @@ export default function DashboardPage() {
             Live Workflow
           </p>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
+          <div className="mt-4 grid gap-4 md:grid-cols-4">
             <StatusCard
               number="01"
+              title="Customer Pre-Alert"
+              description="Expected tracking number is registered before arrival."
+            />
+
+            <StatusCard
+              number="02"
               title="USA Receives"
               description="Package receives a SKY-PKG code and live QR label."
             />
 
             <StatusCard
-              number="02"
+              number="03"
               title="Package Travels"
               description="QR remains attached to the package throughout transit."
             />
 
             <StatusCard
-              number="03"
+              number="04"
               title="Lebanon Confirms"
               description="Scan the QR and confirm receipt in the Lebanon warehouse."
             />
