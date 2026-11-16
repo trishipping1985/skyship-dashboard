@@ -153,6 +153,7 @@ export default function CustomerExpectedPackagesPage() {
             "This tracking number is already registered."
           );
         }
+
         throw new Error(insertError.message);
       }
 
@@ -193,92 +194,171 @@ export default function CustomerExpectedPackagesPage() {
     }
   }
 
+  function formatDate(value: string) {
+    const date = new Date(value);
+
+    return Number.isNaN(date.getTime())
+      ? "Not available"
+      : date.toLocaleString();
+  }
+
+  const inputClass =
+    "w-full rounded-xl border border-sky-200 " +
+    "bg-white px-4 py-4 text-[#073a68] " +
+    "placeholder:text-slate-400 outline-none " +
+    "transition focus:border-sky-500 " +
+    "focus:ring-2 focus:ring-sky-100 " +
+    "disabled:opacity-50";
+
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
-        Loading SkyShip Expected Packages...
+      <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#f8fdff] via-[#eaf8ff] to-[#cdefff] px-6">
+        <div className="text-center">
+          <h1 className="text-4xl font-black italic text-[#087cdb]">
+            SKYSHIP
+          </h1>
+          <p className="mt-3 text-[#52718c]">
+            Loading Expected Packages...
+          </p>
+        </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 text-white">
-      <header className="border-b border-white/10 bg-slate-900/80">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-6">
-          <div>
-            <h1 className="text-2xl font-black text-sky-400">
-              SKYSHIP
-            </h1>
-            <p className="text-xs text-slate-400">
-              Beyond Limits. Delivered.
-            </p>
+    <main className="min-h-screen bg-gradient-to-br from-[#f8fdff] via-[#eaf8ff] to-[#cdefff] text-[#073a68]">
+      <header className="border-b border-sky-100 bg-white/90 shadow-sm backdrop-blur">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-5 sm:px-8">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#19b9f4] to-[#087cdb] shadow-md">
+              <span className="text-2xl font-black italic text-white">
+                S
+              </span>
+            </div>
+
+            <div>
+              <h1 className="text-2xl font-black italic tracking-tight text-[#087cdb]">
+                SKYSHIP
+              </h1>
+              <p className="text-xs font-semibold italic text-[#52718c]">
+                Beyond Limits. Delivered.
+              </p>
+            </div>
           </div>
 
           <Link
             href="/customer/dashboard"
-            className="rounded-xl border border-white/20 px-5 py-3 font-semibold hover:bg-white/10"
+            className="inline-flex items-center justify-center rounded-xl border border-sky-200 bg-white px-5 py-3 text-sm font-bold text-[#087cdb] shadow-sm transition hover:bg-sky-50"
           >
-            Back to Dashboard
+            ← Back to Dashboard
           </Link>
         </div>
       </header>
 
-      <section className="mx-auto max-w-6xl px-6 py-10">
-        <h2 className="text-3xl font-black">
-          Expected Packages
-        </h2>
+      <section className="mx-auto max-w-6xl px-5 py-8 sm:px-8 sm:py-12">
+        <div className="overflow-hidden rounded-[24px] border border-sky-100 bg-gradient-to-r from-[#dff5ff] via-[#eaf8ff] to-[#bceaff] px-6 py-8 shadow-[0_8px_28px_rgba(14,130,200,0.08)] sm:px-10">
+          <div className="flex flex-wrap items-center justify-between gap-5">
+            <div>
+              <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-[#087cdb]">
+                SkyShip Customer Portal
+              </p>
 
-        <p className="mt-3 text-slate-300">
-          Register incoming shipments before they arrive
-          at our Wilmington, Delaware warehouse.
-        </p>
+              <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">
+                Expected Packages
+              </h2>
 
-        <div className="mt-8 grid gap-8 lg:grid-cols-2">
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-            <h3 className="text-2xl font-bold">
-              Register New Package
-            </h3>
+              <p className="mt-3 max-w-xl text-sm font-medium leading-6 text-[#426782] sm:text-base">
+                Register incoming shipments before they
+                arrive at our Wilmington, Delaware
+                warehouse.
+              </p>
+            </div>
 
-            <p className="mt-2 text-sm text-slate-400">
-              Your SkyShip account is linked automatically.
-              No customer code is required.
-            </p>
+            <div className="rounded-2xl border border-white/80 bg-white/75 px-6 py-4 text-center shadow-sm">
+              <p className="text-xs font-bold uppercase tracking-wide text-[#52718c]">
+                Registered Packages
+              </p>
+
+              <p className="mt-1 text-4xl font-black text-[#087cdb]">
+                {packages.length}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-7 grid items-start gap-6 lg:grid-cols-2">
+          <section className="overflow-hidden rounded-[24px] border border-sky-100 bg-white/95 shadow-[0_8px_28px_rgba(14,130,200,0.09)]">
+            <div className="border-b border-sky-100 bg-gradient-to-r from-[#f5fcff] to-[#e7f7ff] px-6 py-6">
+              <div className="flex items-center gap-3">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#16b5f2] to-[#087cdb] text-xl font-black text-white shadow-sm">
+                  +
+                </span>
+
+                <h3 className="text-xl font-black sm:text-2xl">
+                  Register New Package
+                </h3>
+              </div>
+
+              <p className="mt-3 text-sm leading-6 text-[#52718c]">
+                Your SkyShip account is linked
+                automatically. No customer code is
+                required in your shipping address.
+              </p>
+            </div>
 
             <form
               onSubmit={createPreAlert}
-              className="mt-7 space-y-5"
+              className="space-y-6 p-6"
             >
               <div>
-                <label className="mb-2 block font-semibold">
+                <label
+                  htmlFor="tracking"
+                  className="mb-2 block text-sm font-bold text-[#073a68]"
+                >
                   Tracking Number
                 </label>
 
                 <input
+                  id="tracking"
+                  type="text"
+                  autoComplete="off"
+                  maxLength={200}
                   value={tracking}
-                  onChange={(e) =>
-                    setTracking(e.target.value)
+                  onChange={(event) =>
+                    setTracking(event.target.value)
                   }
                   placeholder="Enter carrier tracking number"
                   required
                   disabled={saving}
-                  className="w-full rounded-xl border border-white/20 bg-slate-950 px-4 py-4 text-white outline-none focus:border-sky-400 disabled:opacity-50"
+                  className={inputClass}
                 />
+
+                <p className="mt-2 text-xs text-[#64829a]">
+                  Enter the tracking number provided by
+                  your seller or shipping carrier.
+                </p>
               </div>
 
               <div>
-                <label className="mb-2 block font-semibold">
-                  Carrier
+                <label
+                  htmlFor="carrier"
+                  className="mb-2 block text-sm font-bold text-[#073a68]"
+                >
+                  Shipping Carrier
                 </label>
 
                 <select
+                  id="carrier"
                   value={carrier}
-                  onChange={(e) =>
-                    setCarrier(e.target.value)
+                  onChange={(event) =>
+                    setCarrier(event.target.value)
                   }
                   disabled={saving}
-                  className="w-full rounded-xl border border-white/20 bg-slate-950 px-4 py-4 text-white outline-none focus:border-sky-400 disabled:opacity-50"
+                  className={inputClass}
                 >
-                  <option value="">Select carrier</option>
+                  <option value="">
+                    Select carrier
+                  </option>
                   <option value="FedEx">FedEx</option>
                   <option value="UPS">UPS</option>
                   <option value="DHL">DHL</option>
@@ -291,13 +371,19 @@ export default function CustomerExpectedPackagesPage() {
               </div>
 
               {error && (
-                <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-300">
+                <div
+                  role="alert"
+                  className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700"
+                >
                   {error}
                 </div>
               )}
 
               {message && (
-                <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-4 text-green-300">
+                <div
+                  role="status"
+                  className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm font-medium text-green-800"
+                >
                   {message}
                 </div>
               )}
@@ -305,73 +391,116 @@ export default function CustomerExpectedPackagesPage() {
               <button
                 type="submit"
                 disabled={saving || !customerId}
-                className="w-full rounded-xl bg-sky-500 px-5 py-4 font-black text-white transition hover:bg-sky-400 disabled:opacity-50"
+                className="w-full rounded-xl bg-gradient-to-r from-[#08b4ee] to-[#087cdb] px-6 py-4 text-base font-black text-white shadow-[0_6px_16px_rgba(8,124,219,0.22)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {saving
                   ? "Registering Package..."
                   : "Register Expected Package"}
               </button>
             </form>
-          </div>
+          </section>
 
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-2xl font-bold">
-                My Expected Packages
-              </h3>
+          <section className="overflow-hidden rounded-[24px] border border-sky-100 bg-white/95 shadow-[0_8px_28px_rgba(14,130,200,0.09)]">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-sky-100 bg-gradient-to-r from-[#f5fcff] to-[#e7f7ff] px-6 py-6">
+              <div>
+                <h3 className="text-xl font-black sm:text-2xl">
+                  My Expected Packages
+                </h3>
+
+                <p className="mt-2 text-sm text-[#52718c]">
+                  Track packages registered with your
+                  SkyShip account.
+                </p>
+              </div>
 
               <button
                 type="button"
                 onClick={() => void refreshPackages()}
-                disabled={refreshing}
-                className="rounded-xl border border-white/20 px-4 py-2 text-sm font-semibold hover:bg-white/10 disabled:opacity-50"
+                disabled={refreshing || !customerId}
+                className="rounded-xl border border-sky-200 bg-white px-5 py-3 text-sm font-bold text-[#087cdb] shadow-sm transition hover:bg-sky-50 disabled:opacity-50"
               >
                 {refreshing ? "Refreshing..." : "Refresh"}
               </button>
             </div>
 
-            {packages.length === 0 ? (
-              <p className="mt-8 text-slate-400">
-                No expected packages registered yet.
-              </p>
-            ) : (
-              <div className="mt-6 space-y-4">
-                {packages.map((pkg) => (
-                  <div
-                    key={pkg.id}
-                    className="rounded-2xl border border-white/10 bg-slate-950/60 p-5"
-                  >
-                    <p className="break-all text-lg font-black text-sky-400">
-                      {pkg.tracking_number}
-                    </p>
-
-                    <p className="mt-2 text-sm text-slate-300">
-                      Carrier: {pkg.carrier || "Not specified"}
-                    </p>
-
-                    <p className="mt-2 text-sm text-slate-300">
-                      Status:{" "}
-                      <span className="font-bold uppercase text-amber-300">
-                        {pkg.status}
-                      </span>
-                    </p>
-
-                    <p className="mt-3 text-xs text-slate-500">
-                      Registered:{" "}
-                      {new Date(
-                        pkg.created_at
-                      ).toLocaleString()}
-                    </p>
+            <div className="p-6">
+              {packages.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-sky-200 bg-gradient-to-b from-[#f8fdff] to-[#edf9ff] px-5 py-12 text-center">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-sky-100 text-3xl">
+                    📦
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+
+                  <h4 className="mt-5 text-lg font-black">
+                    No Expected Packages Yet
+                  </h4>
+
+                  <p className="mx-auto mt-3 max-w-xs text-sm leading-6 text-[#52718c]">
+                    Once you register a tracking number,
+                    your expected shipment will appear
+                    here.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {packages.map((pkg) => (
+                    <article
+                      key={pkg.id}
+                      className="rounded-2xl border border-sky-100 bg-gradient-to-r from-[#f8fdff] to-[#edf9ff] p-5 shadow-sm"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold uppercase tracking-wide text-[#64829a]">
+                            Tracking Number
+                          </p>
+
+                          <p className="mt-2 break-all text-lg font-black text-[#087cdb]">
+                            {pkg.tracking_number}
+                          </p>
+                        </div>
+
+                        <span className="rounded-full border border-sky-200 bg-sky-100 px-3 py-1.5 text-xs font-extrabold uppercase text-[#087cdb]">
+                          {pkg.status.replace(/_/g, " ")}
+                        </span>
+                      </div>
+
+                      <div className="mt-5 grid gap-3 border-t border-sky-100 pt-4 sm:grid-cols-2">
+                        <div>
+                          <p className="text-xs font-bold text-[#64829a]">
+                            Carrier
+                          </p>
+
+                          <p className="mt-1 text-sm font-bold text-[#073a68]">
+                            {pkg.carrier || "Not specified"}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-xs font-bold text-[#64829a]">
+                            Registered
+                          </p>
+
+                          <p className="mt-1 text-sm font-semibold text-[#073a68]">
+                            {formatDate(pkg.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
         </div>
 
-        <p className="mt-10 text-center text-sm text-slate-500">
+        <div className="mt-8 rounded-2xl border border-sky-100 bg-white/75 px-6 py-5 text-center text-sm text-[#52718c]">
+          Your shipment will be matched to your account
+          using its carrier tracking number when it is
+          received at our USA warehouse.
+        </div>
+
+        <footer className="py-8 text-center text-xs font-semibold text-[#64829a]">
           SkyShip LLC — Beyond Limits. Delivered.
-        </p>
+        </footer>
       </section>
     </main>
   );

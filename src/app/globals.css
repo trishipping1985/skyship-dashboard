@@ -1,26 +1,93 @@
 @import "tailwindcss";
 
+/* SKYSHIP LLC — UNIVERSAL BRAND THEME */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+
+  --background: #f4faff;
+  --foreground: #172b4d;
+
+  --skyship-primary: #0ea5e9;
+  --skyship-primary-hover: #0284c7;
+  --skyship-primary-light: #e0f2fe;
+
+  --skyship-background: #f4faff;
+  --skyship-surface: #ffffff;
+
+  --skyship-text: #172b4d;
+  --skyship-muted: #64748b;
+
+  --skyship-border: #dbeafe;
+  --skyship-success: #16a34a;
+  --skyship-warning: #d97706;
+  --skyship-danger: #dc2626;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
+  --color-skyship-primary: var(--skyship-primary);
+  --color-skyship-primary-hover: var(--skyship-primary-hover);
+  --color-skyship-primary-light: var(--skyship-primary-light);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: light;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  margin: 0;
+  min-height: 100vh;
+
+  background: var(--skyship-background);
+  color: var(--skyship-text);
+
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Shared SkyShip utility classes */
+
+.skyship-page {
+  min-height: 100vh;
+  background: var(--skyship-background);
+  color: var(--skyship-text);
+}
+
+.skyship-card {
+  background: var(--skyship-surface);
+  border: 1px solid var(--skyship-border);
+  border-radius: 20px;
+  box-shadow: 0 8px 24px rgba(14, 165, 233, 0.06);
+}
+
+.skyship-button {
+  background: var(--skyship-primary);
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.skyship-button:hover {
+  background: var(--skyship-primary-hover);
+}
+
+.skyship-input {
+  background: #ffffff;
+  color: var(--skyship-text);
+  border: 1px solid var(--skyship-border);
+  border-radius: 12px;
+  outline: none;
+}
+
+.skyship-input:focus {
+  border-color: var(--skyship-primary);
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.12);
 }
