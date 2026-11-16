@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 
@@ -27,8 +27,16 @@ type Shipment = {
   lebanon_received_at: string | null;
 };
 
+type PackageEvent = {
+  id: string;
+  status: string;
+  created_at: string | null;
+};
+
 const PACKAGE_FIELDS =
   "id, sky_code, package_code, carrier_tracking_number, tracking_number, customer_id, customer_code, carrier, status, received_at, shipped_at, lebanon_received_at";
+
+const EVENT_FIELDS = "id, status, created_at";
 
 const STATUSES: {
   value: ShipmentStatus;
@@ -75,6 +83,10 @@ function formatDate(value: string | null) {
 }
 
 function statusLabel(value: string | null) {
+  if (value === "expected") {
+    return "Expected Package";
+  }
+
   return (
     STATUSES.find((item) => item.value === value)
       ?.label ||
@@ -156,9 +168,8 @@ function validateProgression(
     return "Shipment statuses cannot move backward.";
   }
 
-  // Lebanon receipt must be a real, explicit
-  // warehouse confirmation. It is never
-  // fabricated during an automatic jump.
+  // Lebanon receipt is an actual warehouse
+  // confirmation, never an inferred stage.
   if (target === "received_in_lebanon") {
     if (
       shipment.status !== "in_transit" ||
@@ -172,8 +183,6 @@ function validateProgression(
     }
   }
 
-  // Later delivery stages require an existing
-  // Lebanon warehouse confirmation.
   if (
     target === "out_for_delivery" ||
     target === "delivered"
@@ -343,6 +352,152 @@ function ShipmentProgress({
   );
 }
 
+// New Stage 4 component.
+// Displays actual package_events records.
+// It never creates, modifies, or deletes events.
+function ShipmentHistory({
+  events,
+  loading,
+  error,
+  onRefresh,
+}: {
+  events: PackageEvent[];
+  loading: boolean;
+  error: string;
+  onRefresh: () => void;
+}) {
+  return (
+    <div className="mt-7 rounded-2xl border border-sky-200 bg-white p-5 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-xl font-black text-[#0879c5]">
+            Shipment History
+          </h3>
+
+          <p className="mt-2 text-sm text-slate-600">
+            Actual status events recorded in SkyShip.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={loading}
+          className="rounded-xl border border-sky-300 bg-sky-50 px-4 py-3 text-sm font-bold text-[#0879c5] transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {loading
+            ? "Loading..."
+            : "Refresh History"}
+        </button>
+      </div>
+
+      {loading && (
+        <div
+          role="status"
+          className="mt-5 rounded-xl border border-sky-100 bg-[#f8fcff] p-4 text-sm font-semibold text-sky-800"
+        >
+          Loading shipment history...
+        </div>
+      )}
+
+      {error && (
+        <div
+          role="alert"
+          className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+        >
+          <p className="font-bold">
+            History could not be loaded.
+          </p>
+
+          <p className="mt-2 break-words">
+            {error}
+          </p>
+
+          <p className="mt-2">
+            No shipment records were changed.
+          </p>
+        </div>
+      )}
+
+      {!loading &&
+        !error &&
+        events.length === 0 && (
+          <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            No history events are visible for this package.
+            This may mean no events are recorded or the
+            current account cannot read them.
+          </div>
+        )}
+
+      {!loading &&
+        !error &&
+        events.length > 0 && (
+          <>
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-bold text-slate-700">
+                {events.length} recorded{" "}
+                {events.length === 1
+                  ? "event"
+                  : "events"}
+              </p>
+
+              <p className="text-xs text-slate-500">
+                Oldest to newest
+              </p>
+            </div>
+
+            <ol className="mt-5 space-y-0">
+              {events.map((event, index) => {
+                const isLast =
+                  index === events.length - 1;
+
+                return (
+                  <li
+                    key={event.id}
+                    className="flex items-stretch gap-4"
+                  >
+                    <div className="flex flex-col items-center">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-sky-400 bg-sky-100 text-sm font-black text-[#0879c5]">
+                        {index + 1}
+                      </div>
+
+                      {!isLast && (
+                        <div className="my-1 min-h-6 w-0.5 flex-1 bg-sky-200" />
+                      )}
+                    </div>
+
+                    <div className="mb-3 min-w-0 flex-1 rounded-xl border border-sky-100 bg-[#f8fcff] p-4">
+                      <p className="font-bold text-[#073a68]">
+                        {statusLabel(event.status)}
+                      </p>
+
+                      <p className="mt-2 text-sm text-slate-600">
+                        {formatDate(event.created_at)}
+                      </p>
+
+                      <p className="mt-2 text-xs font-medium text-slate-500">
+                        Recorded database event
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </>
+        )}
+
+      <p className="mt-4 text-xs leading-5 text-slate-500">
+        This history is read directly from the
+        package_events table. It does not infer
+        skipped stages, generate timestamps,
+        or create notifications. Event times
+        are displayed in your browser's local
+        time zone.
+      </p>
+    </div>
+  );
+}
+
 export default function ShipmentsPage() {
   const [search, setSearch] = useState("");
 
@@ -369,6 +524,20 @@ export default function ShipmentsPage() {
   const [diagnostic, setDiagnostic] =
     useState("");
 
+  // Stage 4: read-only history state.
+  const [history, setHistory] =
+    useState<PackageEvent[]>([]);
+
+  const [historyLoading, setHistoryLoading] =
+    useState(false);
+
+  const [historyError, setHistoryError] =
+    useState("");
+
+  // Prevent older asynchronous history requests
+  // from replacing a newly selected package's data.
+  const historyRequestRef = useRef(0);
+
   const currentDisplay = selected
     ? displayStatus(selected)
     : null;
@@ -380,12 +549,79 @@ export default function ShipmentsPage() {
       )
     : [];
 
+  async function loadHistory(
+    packageId: string,
+    requestId: number
+  ) {
+    if (requestId !== historyRequestRef.current) {
+      return;
+    }
+
+    setHistoryLoading(true);
+    setHistoryError("");
+    setHistory([]);
+
+    try {
+      const { data, error: readError } =
+        await supabase
+          .from("package_events")
+          .select(EVENT_FIELDS)
+          .eq("package_id", packageId)
+          .order("created_at", {
+            ascending: true,
+          })
+          .order("id", {
+            ascending: true,
+          });
+
+      if (requestId !== historyRequestRef.current) {
+        return;
+      }
+
+      if (readError) {
+        setHistoryError(readError.message);
+        return;
+      }
+
+      setHistory((data || []) as PackageEvent[]);
+    } catch (err) {
+      if (requestId !== historyRequestRef.current) {
+        return;
+      }
+
+      setHistoryError(getErrorMessage(err));
+    } finally {
+      if (requestId === historyRequestRef.current) {
+        setHistoryLoading(false);
+      }
+    }
+  }
+
+  function refreshHistory() {
+    if (!selected || historyLoading || saving) {
+      return;
+    }
+
+    const requestId = ++historyRequestRef.current;
+
+    void loadHistory(selected.id, requestId);
+  }
+
   async function handleSearch(
     e: FormEvent<HTMLFormElement>
   ) {
     e.preventDefault();
 
+    if (saving || searching) return;
+
     const query = search.trim();
+
+    // Invalidate any ongoing history request.
+    ++historyRequestRef.current;
+
+    setHistory([]);
+    setHistoryError("");
+    setHistoryLoading(false);
 
     setError("");
     setSuccess("");
@@ -454,6 +690,8 @@ export default function ShipmentsPage() {
   function selectShipment(
     shipment: Shipment
   ) {
+    if (saving || searching) return;
+
     setSelected(shipment);
 
     setNewStatus(
@@ -464,6 +702,11 @@ export default function ShipmentsPage() {
     setError("");
     setSuccess("");
     setDiagnostic("");
+
+    // Load history for the newly selected package.
+    const requestId = ++historyRequestRef.current;
+
+    void loadHistory(shipment.id, requestId);
   }
 
   async function diagnoseNoUpdate(
@@ -629,9 +872,8 @@ export default function ShipmentsPage() {
         newStatus ===
         "received_in_lebanon"
       ) {
-        // Lebanon arrival is an actual
-        // warehouse confirmation, never
-        // an inferred skipped stage.
+        // Lebanon receipt must be confirmed.
+        // It is never a synthetic skipped stage.
         const {
           data,
           error: updateError,
@@ -675,10 +917,7 @@ export default function ShipmentsPage() {
           data as Shipment | null;
       } else {
         // Exactly one status UPDATE.
-        // Never loop through skipped
-        // stages. This prevents generating
-        // synthetic intermediate trigger
-        // events or notifications.
+        // Never loop through skipped stages.
 
         const updates: {
           status: ShipmentStatus;
@@ -687,10 +926,6 @@ export default function ShipmentsPage() {
           status: newStatus,
         };
 
-        // Record a shipping timestamp only
-        // when shipping is explicitly confirmed.
-        // A jump past shipped does not
-        // invent a shipped_at value.
         if (
           newStatus === "shipped" &&
           !live.shipped_at
@@ -708,8 +943,6 @@ export default function ShipmentsPage() {
             live.status
           );
 
-        // Protect the Lebanon receiving
-        // condition against concurrent changes.
         if (
           live.lebanon_received_at
         ) {
@@ -726,8 +959,6 @@ export default function ShipmentsPage() {
             );
         }
 
-        // Protect existing shipping
-        // timestamps against concurrent edits.
         if (live.shipped_at) {
           updateQuery =
             updateQuery.eq(
@@ -785,7 +1016,7 @@ export default function ShipmentsPage() {
         return;
       }
 
-      // Verify the actual saved record.
+      // Verify the actual saved database record.
       const {
         data: verifiedData,
         error: verificationError,
@@ -845,6 +1076,14 @@ export default function ShipmentsPage() {
           verifiedDisplay
         )}. Only the selected status was written.`
       );
+
+      // Stage 4: refresh actual history after
+      // successful status verification.
+      // This reads existing trigger-created events.
+      // No event is inserted by the page.
+      const requestId = ++historyRequestRef.current;
+
+      await loadHistory(verified.id, requestId);
     } catch (err) {
       setError(
         getErrorMessage(err)
@@ -952,7 +1191,9 @@ export default function ShipmentsPage() {
                   <button
                     key={shipment.id}
                     type="button"
-                    disabled={saving}
+                    disabled={
+                      saving || searching
+                    }
                     onClick={() =>
                       selectShipment(
                         shipment
@@ -1058,6 +1299,14 @@ export default function ShipmentsPage() {
 
             <ShipmentProgress
               shipment={selected}
+            />
+
+            {/* Stage 4: Actual database history */}
+            <ShipmentHistory
+              events={history}
+              loading={historyLoading}
+              error={historyError}
+              onRefresh={refreshHistory}
             />
 
             <div className="mt-7 border-t border-sky-100 pt-6">
