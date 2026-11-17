@@ -1,6 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -35,6 +40,10 @@ type PackageRecord = {
   status: string | null;
   lebanon_received_at: string | null;
 };
+
+type StatusCounts = Partial<
+  Record<ShipmentStatus, number>
+>;
 
 const PAGE_SIZE = 25;
 
@@ -75,6 +84,44 @@ const SHIPMENT_STATUSES: {
     value: "delivered",
     label: "Delivered",
     description: "Packages marked as delivered.",
+  },
+];
+
+const WORKFLOW_STEPS = [
+  {
+    title: "Customer Pre-Alert",
+    description:
+      "Customer registers the tracking number before the package arrives.",
+  },
+  {
+    title: "Received in USA",
+    description:
+      "Warehouse receives the package, assigns its SKY-PKG code, and prints the QR label.",
+  },
+  {
+    title: "Shipped from USA",
+    description:
+      "Package is confirmed shipped from the USA warehouse.",
+  },
+  {
+    title: "In Transit",
+    description:
+      "Package is traveling toward Lebanon with its SKY-PKG tracking identity.",
+  },
+  {
+    title: "Received in Lebanon",
+    description:
+      "Lebanon warehouse scans the QR and confirms physical receipt.",
+  },
+  {
+    title: "Out for Delivery",
+    description:
+      "Package is assigned to the final delivery stage.",
+  },
+  {
+    title: "Delivered",
+    description:
+      "Package is marked delivered, completing the shipment journey.",
   },
 ];
 
@@ -294,6 +341,36 @@ function packageStatusLabel(item: PackageRecord) {
   );
 }
 
+// Shared filtering rules for both counts and package lists.
+function applyStatusFilter<T>(
+  query: T,
+  status: ShipmentStatus
+): T {
+  const builder = query as T & {
+    eq: (column: string, value: string) => T;
+    is: (column: string, value: null) => T;
+    or: (filters: string) => T;
+  };
+
+  if (status === "in_transit") {
+    const filtered = builder.eq("status", "in_transit");
+
+    return (
+      filtered as T & {
+        is: (column: string, value: null) => T;
+      }
+    ).is("lebanon_received_at", null);
+  }
+
+  if (status === "received_in_lebanon") {
+    return builder.or(
+      "status.eq.received_in_lebanon,and(status.eq.in_transit,lebanon_received_at.not.is.null)"
+    );
+  }
+
+  return builder.eq("status", status);
+}
+
 export default function DashboardPage() {
   const router = useRouter();
 
@@ -301,7 +378,7 @@ export default function DashboardPage() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
 
-  // Stage 5: Read-only shipment status overview.
+  // Existing Stage 5 status filters.
   const [selectedStatus, setSelectedStatus] =
     useState<ShipmentStatus | null>(null);
 
@@ -320,8 +397,126 @@ export default function DashboardPage() {
   const [statusTotal, setStatusTotal] =
     useState(0);
 
-  // Prevent older requests from overwriting newer results.
   const overviewRequestRef = useRef(0);
+
+  // Stage 6 live counters.
+  const [statusCounts, setStatusCounts] =
+    useState<StatusCounts>({});
+
+  const [countsLoading, setCountsLoading] =
+    useState(true);
+
+  const [countsError, setCountsError] =
+    useState("");
+
+  const [countsLastUpdated, setCountsLastUpdated] =
+    useState<Date | null>(null);
+
+  const countsRequestRef = useRef(0);
+
+  const loadStatusCounts = useCallback(async () => {
+    const requestId = ++countsRequestRef.current;
+
+    setCountsLoading(true);
+    setCountsError("");
+
+    try {
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (requestId !== countsRequestRef.current) {
+        return;
+      }
+
+      if (authError || !user) {
+        setCountsError(
+          "Please sign in to load shipment counts."
+        );
+        return;
+      }
+
+      const results = await Promise.all(
+        SHIPMENT_STATUSES.map(async (stage) => {
+          let query = supabase
+            .from("packages")
+            .select("id", {
+              count: "exact",
+              head: true,
+            });
+
+          query = applyStatusFilter(
+            query,
+            stage.value
+          );
+
+          const { count, error } = await query;
+
+          return {
+            status: stage.value,
+            count,
+            error,
+          };
+        })
+      );
+
+      if (requestId !== countsRequestRef.current) {
+        return;
+      }
+
+      const nextCounts: StatusCounts = {};
+
+      let failed = 0;
+
+      for (const result of results) {
+        if (
+          result.error ||
+          result.count === null
+        ) {
+          failed += 1;
+        } else {
+          nextCounts[result.status] =
+            result.count;
+        }
+      }
+
+      setStatusCounts(nextCounts);
+
+      if (failed > 0) {
+        setCountsError(
+          `Unable to load ${failed} shipment ${
+            failed === 1 ? "count" : "counts"
+          }. Please try refreshing.`
+        );
+      } else {
+        setCountsLastUpdated(new Date());
+      }
+    } catch (error) {
+      if (requestId !== countsRequestRef.current) {
+        return;
+      }
+
+      setCountsError(
+        error instanceof Error
+          ? error.message
+          : "Unable to load shipment counts."
+      );
+    } finally {
+      if (requestId === countsRequestRef.current) {
+        setCountsLoading(false);
+      }
+    }
+  }, []);
+
+  // Load actual package totals when the dashboard opens.
+  useEffect(() => {
+    void loadStatusCounts();
+
+    return () => {
+      countsRequestRef.current += 1;
+    };
+  }, [loadStatusCounts]);
 
   async function loadStatusPackages(
     status: ShipmentStatus,
@@ -359,19 +554,7 @@ export default function DashboardPage() {
           count: "exact",
         });
 
-      // Do not classify an older shipment as
-      // "In Transit" if Lebanon receipt is confirmed.
-      if (status === "in_transit") {
-        query = query
-          .eq("status", "in_transit")
-          .is("lebanon_received_at", null);
-      } else if (status === "received_in_lebanon") {
-        query = query.or(
-          "status.eq.received_in_lebanon,and(status.eq.in_transit,lebanon_received_at.not.is.null)"
-        );
-      } else {
-        query = query.eq("status", status);
-      }
+      query = applyStatusFilter(query, status);
 
       const from = page * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
@@ -398,7 +581,15 @@ export default function DashboardPage() {
         (data || []) as PackageRecord[]
       );
 
-      setStatusTotal(count ?? 0);
+      const total = count ?? 0;
+
+      setStatusTotal(total);
+
+      // Synchronize this card with the fresh list count.
+      setStatusCounts((previous) => ({
+        ...previous,
+        [status]: total,
+      }));
     } catch (error) {
       if (requestId !== overviewRequestRef.current) {
         return;
@@ -614,7 +805,7 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          {/* Existing warehouse operations */}
+          {/* Warehouse operations */}
           <section>
             <div className="mb-5 flex items-center gap-3">
               <span className="text-sky-600">
@@ -662,7 +853,7 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          {/* Stage 5: Shipment Status Overview */}
+          {/* Stage 6: Live Shipment Counters */}
           <section
             id="shipment-status-overview"
             className="rounded-[22px] border border-sky-200 bg-white/90 p-5 shadow-[0_8px_28px_rgba(24,113,177,0.10)] sm:p-6"
@@ -678,24 +869,57 @@ export default function DashboardPage() {
                 </h2>
 
                 <p className="mt-2 text-sm text-slate-600">
-                  Select a status to view matching packages
-                  directly from the database.
+                  Live package totals and status-based
+                  shipment management.
                 </p>
+
+                {countsLastUpdated && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    Counts refreshed:{" "}
+                    {countsLastUpdated.toLocaleTimeString()}
+                  </p>
+                )}
               </div>
 
-              <Link
-                href="/dashboard/shipments"
-                className="inline-flex items-center gap-2 rounded-xl bg-[#0879c5] px-5 py-3 text-sm font-bold text-white hover:bg-[#0669ad]"
-              >
-                Shipment Management
-                <Icon name="arrow" size={18} />
-              </Link>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  disabled={countsLoading}
+                  onClick={() => {
+                    void loadStatusCounts();
+                  }}
+                  className="rounded-xl border border-sky-300 bg-white px-5 py-3 text-sm font-bold text-sky-700 transition hover:bg-sky-50 disabled:opacity-50"
+                >
+                  {countsLoading
+                    ? "Loading Counts..."
+                    : "Refresh Counts"}
+                </button>
+
+                <Link
+                  href="/dashboard/shipments"
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#0879c5] px-5 py-3 text-sm font-bold text-white hover:bg-[#0669ad]"
+                >
+                  Shipment Management
+                  <Icon name="arrow" size={18} />
+                </Link>
+              </div>
             </div>
+
+            {countsError && (
+              <div
+                role="alert"
+                className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-900"
+              >
+                {countsError}
+              </div>
+            )}
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {SHIPMENT_STATUSES.map((stage, index) => {
                 const active =
                   selectedStatus === stage.value;
+
+                const count = statusCounts[stage.value];
 
                 return (
                   <button
@@ -714,7 +938,7 @@ export default function DashboardPage() {
                         : "border-sky-200 bg-gradient-to-br from-white to-[#edf8ff] hover:border-sky-400"
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-start justify-between gap-3">
                       <span
                         className={`flex h-11 w-11 items-center justify-center rounded-xl text-sm font-black ${
                           active
@@ -725,12 +949,20 @@ export default function DashboardPage() {
                         {index + 1}
                       </span>
 
-                      <span className="text-sky-600">
-                        <Icon name="arrow" size={20} />
+                      <span className="text-xs font-bold uppercase tracking-wide text-sky-600">
+                        Packages
                       </span>
                     </div>
 
-                    <h3 className="mt-4 text-base font-black text-[#073a68]">
+                    <div
+                      className="mt-4 text-4xl font-black tabular-nums text-[#0879c5]"
+                    >
+                      {count === undefined
+                        ? "—"
+                        : count.toLocaleString()}
+                    </div>
+
+                    <h3 className="mt-3 text-base font-black text-[#073a68]">
                       {stage.label}
                     </h3>
 
@@ -738,9 +970,10 @@ export default function DashboardPage() {
                       {stage.description}
                     </p>
 
-                    <p className="mt-4 text-sm font-bold text-[#0879c5]">
-                      View Packages
-                    </p>
+                    <div className="mt-4 flex items-center justify-between text-sm font-bold text-[#0879c5]">
+                      <span>View Packages</span>
+                      <Icon name="arrow" size={19} />
+                    </div>
                   </button>
                 );
               })}
@@ -880,7 +1113,10 @@ export default function DashboardPage() {
                         <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-sky-200 pt-5">
                           <button
                             type="button"
-                            disabled={statusPage === 0}
+                            disabled={
+                              statusLoading ||
+                              statusPage === 0
+                            }
                             onClick={() =>
                               void loadStatusPackages(
                                 selectedStatus,
@@ -900,6 +1136,7 @@ export default function DashboardPage() {
                           <button
                             type="button"
                             disabled={
+                              statusLoading ||
                               statusPage + 1 >= totalPages
                             }
                             onClick={() =>
@@ -919,15 +1156,16 @@ export default function DashboardPage() {
 
                 <p className="mt-5 text-xs leading-5 text-slate-500">
                   Read-only view of current package records.
-                  Results are subject to database access
-                  permissions. Historical events are available
-                  in Shipment Management.
+                  Counts refresh when the dashboard opens,
+                  when you press Refresh Counts, or when
+                  a status list is retrieved. Results respect
+                  database access permissions.
                 </p>
               </div>
             )}
           </section>
 
-          {/* Existing Live Workflow */}
+          {/* Stage 6: Complete seven-step workflow */}
           <section className="rounded-[22px] border border-sky-200 bg-white/85 p-6 shadow-[0_8px_28px_rgba(24,113,177,0.10)]">
             <div className="mb-5 flex items-center gap-3">
               <span className="text-sky-600">
@@ -940,36 +1178,29 @@ export default function DashboardPage() {
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-600">
-                  From customer pre-alert to Lebanon receiving.
+                  Seven operational steps from customer
+                  pre-alert to final delivery.
                 </p>
               </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <StatusCard
-                number="01"
-                title="Customer Pre-Alert"
-                description="Expected tracking number is registered before arrival."
-              />
-
-              <StatusCard
-                number="02"
-                title="USA Receives"
-                description="Package receives a SKY-PKG code and live QR label."
-              />
-
-              <StatusCard
-                number="03"
-                title="Package Travels"
-                description="QR remains attached to the package throughout transit."
-              />
-
-              <StatusCard
-                number="04"
-                title="Lebanon Confirms"
-                description="Scan the QR and confirm receipt in the Lebanon warehouse."
-              />
+              {WORKFLOW_STEPS.map((step, index) => (
+                <StatusCard
+                  key={step.title}
+                  number={String(index + 1).padStart(2, "0")}
+                  title={step.title}
+                  description={step.description}
+                />
+              ))}
             </div>
+
+            <p className="mt-5 text-xs leading-5 text-slate-500">
+              This workflow illustrates the standard
+              process. Actual recorded shipment stages
+              remain available in Shipment Management.
+              Skipped stages are not recorded as completed.
+            </p>
           </section>
         </main>
 
