@@ -608,6 +608,7 @@ export default function CustomerDashboardPage() {
             alt="SkyShip LLC"
             className="h-32 w-32 rounded-full object-contain shadow-xl"
           />
+
           <p className="mt-3 text-xs font-semibold text-white/90">
             Beyond Limits. Delivered.
           </p>
@@ -630,7 +631,9 @@ export default function CustomerDashboardPage() {
           <SidebarItem
             icon="calendar"
             label="Expected Packages"
-            onClick={() => router.push("/customer/expected-packages")}
+            onClick={() =>
+              router.push("/customer/expected-packages")
+            }
           />
 
           <SidebarItem
@@ -639,10 +642,14 @@ export default function CustomerDashboardPage() {
             onClick={() => scrollToSection("upcoming")}
           />
 
+          {/* Notifications now opens its working page. */}
           <SidebarItem
             icon="bell"
             label="Notifications"
-            onClick={() => scrollToSection("upcoming")}
+            onClick={() => {
+              setSidebarOpen(false);
+              router.push("/customer/notifications");
+            }}
           />
 
           <SidebarItem
@@ -702,6 +709,7 @@ export default function CustomerDashboardPage() {
                 <p className="text-sm font-bold text-[#073a68]">
                   {profile.full_name || "Customer"}
                 </p>
+
                 <p className="text-xs text-slate-500">
                   {profile.customer_code || "SkyShip Client"}
                 </p>
@@ -760,6 +768,7 @@ export default function CustomerDashboardPage() {
                 <p className="text-xs font-bold text-slate-600">
                   Your SkyShip Customer Code
                 </p>
+
                 <p className="mt-1 text-2xl font-black text-[#073a68]">
                   {profile.customer_code ||
                     "Pending assignment"}
@@ -771,6 +780,7 @@ export default function CustomerDashboardPage() {
               <span className="mt-0.5 text-sky-600">
                 <Icon name="info" size={21} />
               </span>
+
               <p>
                 Your shipments are securely linked to
                 your account. You do not need to include
@@ -875,6 +885,7 @@ export default function CustomerDashboardPage() {
                     ? "No matching packages"
                     : "No packages yet"}
                 </p>
+
                 <p className="mt-2 text-sm text-slate-500">
                   {search
                     ? "Try another tracking number or package code."
@@ -941,7 +952,7 @@ export default function CustomerDashboardPage() {
                           </p>
 
                           <p className="text-sm font-bold text-slate-700">
-                            {pkg.carrier || "â€”"}
+                            {pkg.carrier || "—"}
                           </p>
 
                           <div>
@@ -973,6 +984,7 @@ export default function CustomerDashboardPage() {
                               <h4 className="text-base font-black text-[#073a68]">
                                 Shipment Journey
                               </h4>
+
                               <p className="mt-1 text-xs text-slate-500">
                                 {tracking}
                               </p>
@@ -1101,15 +1113,16 @@ export default function CustomerDashboardPage() {
             </h3>
 
             <p className="mt-2 text-sm text-slate-500">
-              Expected Packages, Package Photos,
-              Notifications, and Profile management
+              Package Photos and Profile management
               are planned for upcoming development.
+              Expected Packages and Notifications
+              are already available.
             </p>
           </section>
         </main>
 
         <footer className="border-t border-sky-200 bg-white/60 px-6 py-5 text-center text-xs font-semibold text-slate-600">
-          SkyShip LLC â€” Beyond Limits. Delivered.
+          SkyShip LLC • Beyond Limits. Delivered.
         </footer>
       </div>
     </div>
