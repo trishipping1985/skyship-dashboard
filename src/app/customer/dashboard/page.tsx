@@ -636,13 +636,16 @@ export default function CustomerDashboardPage() {
             }
           />
 
+          {/* Connect existing photo gallery. */}
           <SidebarItem
             icon="image"
             label="Package Photos"
-            onClick={() => scrollToSection("upcoming")}
+            onClick={() => {
+              setSidebarOpen(false);
+              router.push("/customer/photos");
+            }}
           />
 
-          {/* Notifications now opens its working page. */}
           <SidebarItem
             icon="bell"
             label="Notifications"
@@ -1113,10 +1116,10 @@ export default function CustomerDashboardPage() {
             </h3>
 
             <p className="mt-2 text-sm text-slate-500">
-              Package Photos and Profile management
-              are planned for upcoming development.
-              Expected Packages and Notifications
-              are already available.
+              Expected Packages, Notifications, and
+              Package Photos are now available.
+              Profile management is planned for
+              upcoming development.
             </p>
           </section>
         </main>
