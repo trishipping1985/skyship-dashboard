@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -15,6 +15,68 @@ type IconName =
   | "menu"
   | "arrow"
   | "check";
+
+type ShipmentStatus =
+  | "received"
+  | "shipped"
+  | "in_transit"
+  | "received_in_lebanon"
+  | "out_for_delivery"
+  | "delivered";
+
+type PackageRecord = {
+  id: string;
+  sky_code: string | null;
+  package_code: string | null;
+  carrier_tracking_number: string | null;
+  tracking_number: string | null;
+  customer_code: string | null;
+  carrier: string | null;
+  status: string | null;
+  lebanon_received_at: string | null;
+};
+
+const PAGE_SIZE = 25;
+
+const PACKAGE_FIELDS =
+  "id, sky_code, package_code, carrier_tracking_number, tracking_number, customer_code, carrier, status, lebanon_received_at";
+
+const SHIPMENT_STATUSES: {
+  value: ShipmentStatus;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: "received",
+    label: "Received in USA",
+    description: "Packages received at the USA warehouse.",
+  },
+  {
+    value: "shipped",
+    label: "Shipped",
+    description: "Packages shipped from the USA warehouse.",
+  },
+  {
+    value: "in_transit",
+    label: "In Transit",
+    description: "Packages currently traveling toward Lebanon.",
+  },
+  {
+    value: "received_in_lebanon",
+    label: "Received in Lebanon",
+    description: "Packages confirmed at the Lebanon warehouse.",
+  },
+  {
+    value: "out_for_delivery",
+    label: "Out for Delivery",
+    description: "Packages assigned to the delivery stage.",
+  },
+  {
+    value: "delivered",
+    label: "Delivered",
+    description: "Packages marked as delivered.",
+  },
+];
 
 const navigation: {
   name: string;
@@ -215,12 +277,144 @@ function StatusCard({
   );
 }
 
+function packageStatusLabel(item: PackageRecord) {
+  const effectiveStatus =
+    item.status === "in_transit" &&
+    item.lebanon_received_at
+      ? "received_in_lebanon"
+      : item.status;
+
+  return (
+    SHIPMENT_STATUSES.find(
+      (status) => status.value === effectiveStatus
+    )?.label ||
+    (effectiveStatus || "Unknown")
+      .replace(/_/g, " ")
+      .toUpperCase()
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
+
+  // Stage 5: Read-only shipment status overview.
+  const [selectedStatus, setSelectedStatus] =
+    useState<ShipmentStatus | null>(null);
+
+  const [statusPackages, setStatusPackages] =
+    useState<PackageRecord[]>([]);
+
+  const [statusLoading, setStatusLoading] =
+    useState(false);
+
+  const [statusError, setStatusError] =
+    useState("");
+
+  const [statusPage, setStatusPage] =
+    useState(0);
+
+  const [statusTotal, setStatusTotal] =
+    useState(0);
+
+  // Prevent older requests from overwriting newer results.
+  const overviewRequestRef = useRef(0);
+
+  async function loadStatusPackages(
+    status: ShipmentStatus,
+    page: number
+  ) {
+    const requestId = ++overviewRequestRef.current;
+
+    setSelectedStatus(status);
+    setStatusLoading(true);
+    setStatusError("");
+    setStatusPackages([]);
+    setStatusPage(page);
+    setStatusTotal(0);
+
+    try {
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (requestId !== overviewRequestRef.current) {
+        return;
+      }
+
+      if (authError || !user) {
+        setStatusError(
+          "Please sign in to view shipment information."
+        );
+        return;
+      }
+
+      let query = supabase
+        .from("packages")
+        .select(PACKAGE_FIELDS, {
+          count: "exact",
+        });
+
+      // Do not classify an older shipment as
+      // "In Transit" if Lebanon receipt is confirmed.
+      if (status === "in_transit") {
+        query = query
+          .eq("status", "in_transit")
+          .is("lebanon_received_at", null);
+      } else if (status === "received_in_lebanon") {
+        query = query.or(
+          "status.eq.received_in_lebanon,and(status.eq.in_transit,lebanon_received_at.not.is.null)"
+        );
+      } else {
+        query = query.eq("status", status);
+      }
+
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      const { data, error, count } = await query
+        .order("sky_code", {
+          ascending: false,
+        })
+        .order("id", {
+          ascending: true,
+        })
+        .range(from, to);
+
+      if (requestId !== overviewRequestRef.current) {
+        return;
+      }
+
+      if (error) {
+        setStatusError(error.message);
+        return;
+      }
+
+      setStatusPackages(
+        (data || []) as PackageRecord[]
+      );
+
+      setStatusTotal(count ?? 0);
+    } catch (error) {
+      if (requestId !== overviewRequestRef.current) {
+        return;
+      }
+
+      setStatusError(
+        error instanceof Error
+          ? error.message
+          : "Unable to load shipment information."
+      );
+    } finally {
+      if (requestId === overviewRequestRef.current) {
+        setStatusLoading(false);
+      }
+    }
+  }
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -246,6 +440,15 @@ export default function DashboardPage() {
       setLoggingOut(false);
     }
   }
+
+  const selectedStatusInfo =
+    SHIPMENT_STATUSES.find(
+      (item) => item.value === selectedStatus
+    );
+
+  const totalPages = Math.ceil(
+    statusTotal / PAGE_SIZE
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#f2f9ff] via-[#e2f2ff] to-[#c8e8fa] text-[#073a68]">
@@ -309,6 +512,7 @@ export default function DashboardPage() {
             <p className="text-sm font-bold">
               SkyShip Operations
             </p>
+
             <p className="mt-1 text-xs text-white/80">
               USA • Lebanon
             </p>
@@ -360,6 +564,7 @@ export default function DashboardPage() {
                 <p className="text-sm font-bold">
                   SkyShip Operations
                 </p>
+
                 <p className="text-xs text-slate-500">
                   Warehouse Control Center
                 </p>
@@ -373,7 +578,7 @@ export default function DashboardPage() {
         </header>
 
         <main className="mx-auto max-w-[1500px] space-y-7 p-4 sm:p-6 lg:p-7">
-          {/* Same banner as customer dashboard */}
+          {/* Original SkyShip banner */}
           <section
             className="relative overflow-hidden rounded-[22px] border border-sky-200 bg-[#d9f3ff] shadow-[0_8px_28px_rgba(24,113,177,0.12)]"
             style={{
@@ -409,6 +614,7 @@ export default function DashboardPage() {
             </div>
           </section>
 
+          {/* Existing warehouse operations */}
           <section>
             <div className="mb-5 flex items-center gap-3">
               <span className="text-sky-600">
@@ -419,6 +625,7 @@ export default function DashboardPage() {
                 <h2 className="text-xl font-black sm:text-2xl">
                   Warehouse Operations
                 </h2>
+
                 <p className="mt-1 text-sm text-slate-600">
                   Select a warehouse operation to continue.
                 </p>
@@ -455,6 +662,272 @@ export default function DashboardPage() {
             </div>
           </section>
 
+          {/* Stage 5: Shipment Status Overview */}
+          <section
+            id="shipment-status-overview"
+            className="rounded-[22px] border border-sky-200 bg-white/90 p-5 shadow-[0_8px_28px_rgba(24,113,177,0.10)] sm:p-6"
+          >
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest text-sky-600">
+                  SkyShip Shipment Control
+                </p>
+
+                <h2 className="mt-2 text-xl font-black sm:text-2xl">
+                  Shipment Status Overview
+                </h2>
+
+                <p className="mt-2 text-sm text-slate-600">
+                  Select a status to view matching packages
+                  directly from the database.
+                </p>
+              </div>
+
+              <Link
+                href="/dashboard/shipments"
+                className="inline-flex items-center gap-2 rounded-xl bg-[#0879c5] px-5 py-3 text-sm font-bold text-white hover:bg-[#0669ad]"
+              >
+                Shipment Management
+                <Icon name="arrow" size={18} />
+              </Link>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {SHIPMENT_STATUSES.map((stage, index) => {
+                const active =
+                  selectedStatus === stage.value;
+
+                return (
+                  <button
+                    key={stage.value}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() =>
+                      void loadStatusPackages(
+                        stage.value,
+                        0
+                      )
+                    }
+                    className={`rounded-2xl border p-5 text-left transition hover:shadow-md ${
+                      active
+                        ? "border-sky-500 bg-sky-100 ring-2 ring-sky-300"
+                        : "border-sky-200 bg-gradient-to-br from-white to-[#edf8ff] hover:border-sky-400"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span
+                        className={`flex h-11 w-11 items-center justify-center rounded-xl text-sm font-black ${
+                          active
+                            ? "bg-[#0879c5] text-white"
+                            : "bg-sky-100 text-sky-700"
+                        }`}
+                      >
+                        {index + 1}
+                      </span>
+
+                      <span className="text-sky-600">
+                        <Icon name="arrow" size={20} />
+                      </span>
+                    </div>
+
+                    <h3 className="mt-4 text-base font-black text-[#073a68]">
+                      {stage.label}
+                    </h3>
+
+                    <p className="mt-2 text-xs leading-5 text-slate-600">
+                      {stage.description}
+                    </p>
+
+                    <p className="mt-4 text-sm font-bold text-[#0879c5]">
+                      View Packages
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+
+            {selectedStatus && (
+              <div
+                className="mt-7 rounded-2xl border border-sky-200 bg-[#f8fcff] p-4 sm:p-6"
+                aria-live="polite"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-black text-[#0879c5]">
+                      {selectedStatusInfo?.label}
+                    </h3>
+
+                    <p className="mt-1 text-sm text-slate-600">
+                      Current packages in this status.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void loadStatusPackages(
+                        selectedStatus,
+                        statusPage
+                      )
+                    }
+                    disabled={statusLoading}
+                    className="rounded-xl border border-sky-300 bg-white px-4 py-3 text-sm font-bold text-sky-700 hover:bg-sky-50 disabled:opacity-50"
+                  >
+                    {statusLoading
+                      ? "Loading..."
+                      : "Refresh List"}
+                  </button>
+                </div>
+
+                {statusLoading && (
+                  <p
+                    role="status"
+                    className="mt-5 rounded-xl border border-sky-100 bg-white p-4 text-sm font-semibold text-sky-700"
+                  >
+                    Loading matching shipments...
+                  </p>
+                )}
+
+                {statusError && (
+                  <div
+                    role="alert"
+                    className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+                  >
+                    <p className="font-bold">
+                      Unable to load shipments
+                    </p>
+
+                    <p className="mt-2 break-words">
+                      {statusError}
+                    </p>
+
+                    <p className="mt-2">
+                      No package records were changed.
+                    </p>
+                  </div>
+                )}
+
+                {!statusLoading &&
+                  !statusError && (
+                    <>
+                      <p className="mt-5 text-sm font-bold text-slate-700">
+                        {statusTotal} matching{" "}
+                        {statusTotal === 1
+                          ? "package"
+                          : "packages"}
+                      </p>
+
+                      {statusPackages.length === 0 ? (
+                        <div className="mt-4 rounded-xl border border-sky-100 bg-white p-5 text-sm text-slate-600">
+                          No packages found in this status
+                          among records visible to your account.
+                        </div>
+                      ) : (
+                        <div className="mt-4 space-y-3">
+                          {statusPackages.map((item) => (
+                            <div
+                              key={item.id}
+                              className="rounded-xl border border-sky-100 bg-white p-4 shadow-sm"
+                            >
+                              <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="break-all text-base font-black text-[#0879c5]">
+                                    {item.sky_code ||
+                                      item.package_code ||
+                                      "Package"}
+                                  </p>
+
+                                  <p className="mt-2 break-all text-sm text-slate-600">
+                                    Tracking:{" "}
+                                    {item.carrier_tracking_number ||
+                                      item.tracking_number ||
+                                      "Not recorded"}
+                                  </p>
+                                </div>
+
+                                <span className="rounded-full bg-sky-100 px-3 py-2 text-xs font-bold text-sky-800">
+                                  {packageStatusLabel(item)}
+                                </span>
+                              </div>
+
+                              <div className="mt-4 grid gap-3 border-t border-sky-100 pt-4 text-sm sm:grid-cols-2">
+                                <div>
+                                  <p className="text-xs text-slate-500">
+                                    Customer Code
+                                  </p>
+
+                                  <p className="mt-1 font-semibold">
+                                    {item.customer_code || "—"}
+                                  </p>
+                                </div>
+
+                                <div>
+                                  <p className="text-xs text-slate-500">
+                                    Carrier
+                                  </p>
+
+                                  <p className="mt-1 font-semibold">
+                                    {item.carrier || "—"}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {totalPages > 1 && (
+                        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-sky-200 pt-5">
+                          <button
+                            type="button"
+                            disabled={statusPage === 0}
+                            onClick={() =>
+                              void loadStatusPackages(
+                                selectedStatus,
+                                statusPage - 1
+                              )
+                            }
+                            className="rounded-xl border border-sky-300 bg-white px-4 py-3 text-sm font-bold text-sky-700 disabled:opacity-40"
+                          >
+                            Previous
+                          </button>
+
+                          <p className="text-sm font-bold text-slate-600">
+                            Page {statusPage + 1} of{" "}
+                            {totalPages}
+                          </p>
+
+                          <button
+                            type="button"
+                            disabled={
+                              statusPage + 1 >= totalPages
+                            }
+                            onClick={() =>
+                              void loadStatusPackages(
+                                selectedStatus,
+                                statusPage + 1
+                              )
+                            }
+                            className="rounded-xl border border-sky-300 bg-white px-4 py-3 text-sm font-bold text-sky-700 disabled:opacity-40"
+                          >
+                            Next
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                <p className="mt-5 text-xs leading-5 text-slate-500">
+                  Read-only view of current package records.
+                  Results are subject to database access
+                  permissions. Historical events are available
+                  in Shipment Management.
+                </p>
+              </div>
+            )}
+          </section>
+
+          {/* Existing Live Workflow */}
           <section className="rounded-[22px] border border-sky-200 bg-white/85 p-6 shadow-[0_8px_28px_rgba(24,113,177,0.10)]">
             <div className="mb-5 flex items-center gap-3">
               <span className="text-sky-600">
@@ -465,6 +938,7 @@ export default function DashboardPage() {
                 <h2 className="text-xl font-black sm:text-2xl">
                   Live Workflow
                 </h2>
+
                 <p className="mt-1 text-sm text-slate-600">
                   From customer pre-alert to Lebanon receiving.
                 </p>
@@ -504,4 +978,5 @@ export default function DashboardPage() {
         </footer>
       </div>
     </div>
-  );}
+  );
+}
